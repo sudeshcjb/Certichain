@@ -1,0 +1,5 @@
+{
+  "name": "CertiChain: Secure Credential Ledger",
+  "description": "A React-based blockchain simulation demonstrating cryptographic data integrity for academic certificates. Features real-time SHA-256 hashing, tamper simulation, and Gemini-powered security auditing.",
+  "requestFramePermissions": []
+}

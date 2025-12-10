@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Block, CertificateData } from '../types';
 import { calculateHash } from '../utils/crypto';
-import { Link2, AlertTriangle, ShieldCheck, Edit, Save } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, Edit, Save, ExternalLink, RefreshCcw, Link2Off, Hash, Award, Building, Calendar } from 'lucide-react';
 
 interface BlockCardProps {
   block: Block;
@@ -35,8 +35,8 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, prevBlock, isValid, onTamp
     setIsEditing(false);
   };
 
-  const handleDateChange = (dateString: string) => {
-      if (!dateString) return; // Prevent crash on empty input
+  const handleIssuanceDateChange = (dateString: string) => {
+      if (!dateString) return;
       try {
           const date = new Date(dateString);
           if (!isNaN(date.getTime())) {
@@ -48,174 +48,255 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, prevBlock, isValid, onTamp
   };
 
   const isHashValid = localHash === block.hash;
-  // A block is "broken" in the chain view if the stored previousHash doesn't match the actual previous block's hash
   const isLinkBroken = prevBlock ? prevBlock.hash !== block.previousHash : false;
+  
+  // A block is considered in error state if:
+  // 1. The chain validation says it's invalid (passed via props) OR
+  // 2. The previous hash pointer is broken OR
+  // 3. The current hash doesn't match the data
   const isError = !isValid || isLinkBroken || !isHashValid;
 
   return (
-    <div className={`relative flex-shrink-0 w-80 p-4 rounded-xl border-2 transition-all duration-500 ${
-      isError 
-        ? 'border-red-500 bg-red-50 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
+    <div className={`
+      group relative flex-shrink-0 w-[340px] rounded-2xl border-2 transition-all duration-300 ease-out transform
+      ${isError 
+        ? 'border-red-400 bg-red-50 shadow-[0_10px_30px_-10px_rgba(239,68,68,0.4)] hover:shadow-[0_15px_35px_-10px_rgba(239,68,68,0.5)]' 
         : block.isTampered 
-            ? 'border-orange-400 bg-orange-50 shadow-md' 
-            : 'border-slate-200 bg-white shadow-sm hover:shadow-md'
-    }`}>
+            ? 'border-orange-300 bg-orange-50 shadow-[0_10px_30px_-10px_rgba(249,115,22,0.3)]' 
+            : 'border-slate-200 bg-white shadow-lg hover:shadow-xl hover:-translate-y-1 hover:border-blue-400'
+      }
+    `}>
       
-      {/* Tampered Badge - Shows if data was manually edited, even if hash is valid (re-mined) */}
-      {block.isTampered && (
-        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-20 flex items-center gap-1 whitespace-nowrap">
-            <AlertTriangle size={10} /> DATA TAMPERED
+      {/* Genesis Badge */}
+      {block.isGenesis && (
+          <div className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 text-white text-[10px] font-bold tracking-widest rounded-full shadow-md z-20">
+              GENESIS BLOCK
+          </div>
+      )}
+
+      {/* Tampered Badge - Distinct Indicator */}
+      {block.isTampered && !block.isGenesis && (
+        <div className="absolute -top-3 right-6 bg-orange-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-20 flex items-center gap-1 border border-orange-400">
+            <AlertTriangle size={10} className="text-white" /> DATA TAMPERED
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-          Block #{block.index}
-        </span>
+      {/* Card Header */}
+      <div className={`px-5 py-4 flex justify-between items-center border-b ${isError ? 'border-red-100' : 'border-slate-100'}`}>
+        <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+               #{block.index.toString().padStart(3, '0')}
+            </span>
+            <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                {new Date(block.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
+            </span>
+        </div>
+        
         <div className="flex space-x-2">
             {!block.isGenesis && (
                  <button 
                  onClick={() => setIsEditing(!isEditing)}
-                 className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-700 transition"
-                 title="Simulate Attack (Tamper Data)"
+                 className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                 title="Simulate Attack (Edit Data)"
                >
-                 {isEditing ? <span className="text-xs font-bold text-blue-600">Cancel</span> : <Edit size={14} />}
+                 {isEditing ? <span className="text-xs font-bold text-blue-600">CANCEL</span> : <Edit size={16} />}
                </button>
             )}
-           {!isError ? (
-             <ShieldCheck size={16} className="text-emerald-500" />
-           ) : (
-             <AlertTriangle size={16} className="text-red-500" />
-           )}
+           <div title={isError ? "Block Invalid" : "Block Verified"}>
+                {!isError ? (
+                    <ShieldCheck size={20} className="text-emerald-500 drop-shadow-sm" />
+                ) : (
+                    <AlertTriangle size={20} className="text-red-500 animate-pulse drop-shadow-sm" />
+                )}
+           </div>
         </div>
       </div>
 
-      {/* Data Section */}
-      <div className="space-y-3 mb-4">
+      {/* Card Body - Content */}
+      <div className="p-5 space-y-4">
         {isEditing ? (
-            <div className="space-y-2">
-                 <input 
-                    type="text" 
-                    value={editData.studentName}
-                    onChange={(e) => setEditData({...editData, studentName: e.target.value})}
-                    placeholder="Student Name"
-                    className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300 focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                />
-                 <input 
-                    type="text" 
-                    value={editData.university}
-                    onChange={(e) => setEditData({...editData, university: e.target.value})}
-                    placeholder="University"
-                    className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300"
-                />
-                 <input 
-                    type="text" 
-                    value={editData.degree}
-                    onChange={(e) => setEditData({...editData, degree: e.target.value})}
-                    placeholder="Degree"
-                    className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300"
-                />
-                 <input 
-                    type="text" 
-                    value={editData.gpa}
-                    onChange={(e) => setEditData({...editData, gpa: e.target.value})}
-                    placeholder="GPA"
-                    className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300"
-                />
-                 <input 
-                    type="date" 
-                    value={editData.graduationDate}
-                    onChange={(e) => setEditData({...editData, graduationDate: e.target.value})}
-                    className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300"
-                />
-                 {/* Added Issuance Date Edit Field */}
-                 <input 
-                    type="datetime-local" 
-                    value={editData.issuanceDate ? editData.issuanceDate.slice(0, 16) : ''}
-                    onChange={(e) => handleDateChange(e.target.value)}
-                    className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300"
-                />
-                <button 
-                    onClick={handleSave}
-                    className="w-full flex items-center justify-center gap-2 bg-yellow-100 text-yellow-800 text-xs font-bold py-1 rounded hover:bg-yellow-200"
-                >
-                    <Save size={12} /> Inject Malicious Data
-                </button>
+            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="bg-yellow-50 p-3 rounded border border-yellow-200 text-xs text-yellow-800 mb-2 flex gap-2">
+                    <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                    <span>Modifying this data will invalidate the block hash and break the chain.</span>
+                </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Student Name</label>
+                    <input 
+                        type="text" 
+                        value={editData.studentName}
+                        onChange={(e) => setEditData({...editData, studentName: e.target.value})}
+                        className="w-full text-sm border p-2 rounded font-mono bg-white border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">University</label>
+                    <input 
+                        type="text" 
+                        value={editData.university}
+                        onChange={(e) => setEditData({...editData, university: e.target.value})}
+                        className="w-full text-sm border p-2 rounded font-mono bg-white border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                 </div>
+                 <div className="grid grid-cols-2 gap-2">
+                     <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Degree</label>
+                         <input 
+                            type="text" 
+                            value={editData.degree}
+                            onChange={(e) => setEditData({...editData, degree: e.target.value})}
+                            className="w-full text-sm border p-2 rounded font-mono bg-white border-blue-200 focus:outline-none"
+                        />
+                     </div>
+                     <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">GPA</label>
+                         <input 
+                            type="text" 
+                            value={editData.gpa}
+                            onChange={(e) => setEditData({...editData, gpa: e.target.value})}
+                            className="w-full text-sm border p-2 rounded font-mono bg-white border-blue-200 focus:outline-none"
+                        />
+                     </div>
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Graduation</label>
+                    <input 
+                        type="date" 
+                        value={editData.graduationDate}
+                        onChange={(e) => setEditData({...editData, graduationDate: e.target.value})}
+                        className="w-full text-sm border p-2 rounded font-mono bg-white border-blue-200 focus:outline-none"
+                    />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Issuance</label>
+                    <input 
+                        type="datetime-local" 
+                        value={editData.issuanceDate ? editData.issuanceDate.slice(0, 16) : ''}
+                        onChange={(e) => handleIssuanceDateChange(e.target.value)}
+                        className="w-full text-sm border p-2 rounded font-mono bg-white border-blue-200 focus:outline-none"
+                    />
+                 </div>
             </div>
         ) : (
-            <div className={`p-2 rounded text-sm space-y-1 ${block.isTampered && !isError ? 'bg-orange-100/50' : 'bg-slate-50'}`}>
-                <div className="flex justify-between">
-                    <span className="text-slate-400 text-xs">Student</span>
-                    <span className="font-medium text-slate-700">{block.data.studentName}</span>
+            <div className="space-y-1">
+                <h3 className="text-xl font-bold text-slate-800 leading-tight">
+                    {block.data.studentName}
+                </h3>
+                <div className="flex items-center gap-1.5 text-slate-600 text-xs font-medium">
+                    <Building size={12} className="text-slate-400" />
+                    {block.data.university}
                 </div>
-                <div className="flex justify-between">
-                    <span className="text-slate-400 text-xs">University</span>
-                    <span className="font-medium text-slate-700 text-right truncate ml-2">{block.data.university}</span>
+                <div className="flex items-center gap-1.5 text-blue-600 text-xs font-medium italic pt-1">
+                    <Award size={12} />
+                    {block.data.degree}
                 </div>
-                <div className="flex justify-between">
-                    <span className="text-slate-400 text-xs">Degree</span>
-                    <span className="font-medium text-slate-700">{block.data.degree}</span>
+                
+                <div className="grid grid-cols-2 gap-4 mt-4 pt-3 border-t border-slate-100">
+                    <div className="text-xs">
+                        <span className="block text-[10px] text-slate-400 uppercase font-bold">GPA</span>
+                        <span className="font-mono text-slate-700 bg-slate-100 px-1.5 rounded inline-block">{block.data.gpa}</span>
+                    </div>
+                    <div className="text-xs">
+                        <span className="block text-[10px] text-slate-400 uppercase font-bold">Graduated</span>
+                        <span className="font-mono text-slate-700">{block.data.graduationDate}</span>
+                    </div>
                 </div>
-                <div className="flex justify-between">
-                    <span className="text-slate-400 text-xs">GPA</span>
-                    <span className="font-medium text-slate-700">{block.data.gpa}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span className="text-slate-400 text-xs">Graduated</span>
-                    <span className="font-medium text-slate-700">{block.data.graduationDate}</span>
-                </div>
-                <div className="flex justify-between items-center pt-1 border-t border-slate-200 mt-1">
-                    <span className="text-slate-400 text-[10px]">Issued</span>
-                    <span className="font-medium text-slate-500 text-[10px]">{new Date(block.data.issuanceDate).toLocaleString()}</span>
+                 <div className="text-xs pt-2 flex items-center gap-2">
+                    <Calendar size={12} className="text-slate-300" />
+                    <span className="font-mono text-slate-400 text-[10px]">
+                        Issued: {new Date(block.data.issuanceDate).toLocaleString()}
+                    </span>
                 </div>
             </div>
         )}
       </div>
 
-      {/* Hash Details */}
-      <div className="space-y-2 text-[10px] font-mono text-slate-500">
-        <div>
-          <div className="uppercase text-xs text-slate-400 mb-0.5">Previous Hash</div>
-          <div className={`truncate p-1 rounded ${isLinkBroken ? 'bg-red-100 text-red-700 font-bold' : 'bg-slate-100'}`}>
-            {block.previousHash}
-          </div>
-        </div>
-        
-        <div>
-          <div className="uppercase text-xs text-slate-400 mb-0.5">Current Hash (Stored)</div>
-          <div className="truncate bg-slate-100 p-1 rounded">{block.hash}</div>
-        </div>
-        
-        {/* Visual cue for calculated vs stored */}
-        {!isHashValid && (
-             <div className="mt-1">
-                <div className="uppercase text-xs text-red-500 mb-0.5">Calculated Hash (Actual)</div>
-                <div className="truncate bg-red-100 text-red-800 p-1 rounded animate-pulse">
-                    {localHash}
+      {/* Footer - Cryptography */}
+      <div className={`
+        px-5 py-4 text-[10px] font-mono border-t rounded-b-xl
+        ${isError ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}
+      `}>
+        <div className="space-y-3">
+            
+            {/* Previous Hash */}
+            <div className="relative group/hash">
+                <div className="flex justify-between items-end mb-1">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Link2Off size={10} className={isLinkBroken ? "text-red-500" : "text-slate-300"} />
+                        Prev Hash
+                    </span>
+                    {isLinkBroken && (
+                        <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[9px] font-bold animate-pulse">BROKEN LINK</span>
+                    )}
                 </div>
-                <div className="mt-2 text-center">
-                    <button 
-                        onClick={() => onMine(block.index)}
-                        className="w-full py-1 px-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-                    >
-                        Re-Mine (Fix Hash)
-                    </button>
+                
+                <div className={`truncate p-1.5 rounded border transition-colors ${
+                    isLinkBroken ? "bg-red-100 border-red-200 text-red-700 font-bold" : "bg-white border-slate-200 text-slate-500"
+                }`}>
+                    {block.previousHash}
                 </div>
-           </div>
-        )}
 
-        <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100">
-            <span>Nonce: {block.nonce}</span>
-            <span className="text-slate-300 text-[10px]">Mined: {new Date(block.timestamp).toLocaleTimeString()}</span>
+                {isLinkBroken && prevBlock && (
+                     <div className="mt-1 pl-2 border-l-2 border-emerald-300">
+                        <span className="block text-[9px] text-emerald-600 font-bold mb-0.5">EXPECTED:</span>
+                        <div className="truncate text-emerald-600 font-bold opacity-75">
+                            {prevBlock.hash}
+                        </div>
+                     </div>
+                )}
+            </div>
+
+            {/* Current Hash */}
+            <div>
+                <div className="flex justify-between items-end mb-1">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Hash size={10} className={!isHashValid ? "text-red-500" : "text-slate-300"} />
+                        Block Hash
+                    </span>
+                    {!isHashValid && (
+                        <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[9px] font-bold">INVALID</span>
+                    )}
+                </div>
+                <div className={`truncate p-1.5 rounded border transition-colors ${
+                    !isHashValid ? "bg-red-100 border-red-200 text-red-700 font-bold" : "bg-white border-slate-200 text-slate-600 font-medium"
+                }`}>
+                    {block.hash}
+                </div>
+            </div>
+            
+            <div className="flex justify-between items-center text-slate-400 pt-1 border-t border-slate-200/50 mt-2">
+                <span className="flex items-center gap-1">Nonce: <span className="text-slate-600">{block.nonce}</span></span>
+                <a 
+                    href={`https://blockexplorer.com/block/${block.hash}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-blue-500 hover:text-blue-700 hover:underline transition"
+                >
+                    Explorer <ExternalLink size={8} />
+                </a>
+            </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="mt-4">
+            {isEditing ? (
+                <button 
+                    onClick={handleSave}
+                    className="w-full py-2.5 bg-blue-600 text-white rounded-lg flex items-center justify-center gap-2 text-xs font-bold hover:bg-blue-700 hover:shadow-lg transition-all transform active:scale-95"
+                >
+                    <Save size={14} /> SAVE & TAMPER
+                </button>
+            ) : isError ? (
+                <button 
+                    onClick={() => onMine(block.index)}
+                    className="w-full py-2.5 bg-red-600 text-white rounded-lg flex items-center justify-center gap-2 text-xs font-bold hover:bg-red-700 hover:shadow-lg transition-all animate-pulse hover:animate-none transform active:scale-95 shadow-red-200"
+                >
+                    <RefreshCcw size={14} /> RE-MINE (FIX CHAIN)
+                </button>
+            ) : null}
         </div>
       </div>
 
-      {/* Connection Line */}
-      <div className="absolute top-1/2 -right-6 w-6 h-0.5 bg-slate-300 z-0"></div>
-      <div className={`absolute top-1/2 -right-8 p-1 rounded-full z-10 ${isValid && !isLinkBroken ? 'bg-slate-50 text-slate-300' : 'bg-red-100 text-red-500'}`}>
-         {isValid && !isLinkBroken ? <Link2 size={16} /> : <AlertTriangle size={16} />}
-      </div>
     </div>
   );
 };

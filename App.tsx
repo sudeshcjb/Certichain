@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import BlockCard from './components/BlockCard';
 import { Block, CertificateData, AppView } from './types';
@@ -11,7 +11,12 @@ import {
     Cpu, 
     RefreshCcw, 
     Search,
-    BrainCircuit
+    BrainCircuit,
+    PlusCircle,
+    FileSearch,
+    CheckCircle,
+    XCircle,
+    AlertCircle
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -37,6 +42,14 @@ const App: React.FC = () => {
   const [isAuditing, setIsAuditing] = useState(false);
   const [chatConcept, setChatConcept] = useState("");
   const [chatResponse, setChatResponse] = useState("");
+  
+  // Verification Tool State
+  const [searchHash, setSearchHash] = useState("");
+  const [searchResult, setSearchResult] = useState<{
+      found: boolean;
+      block?: Block;
+      isIntegrityValid?: boolean;
+  } | null>(null);
 
   // Initialize Blockchain
   useEffect(() => {
@@ -100,11 +113,12 @@ const App: React.FC = () => {
   const handleTamper = async (index: number, maliciousData: CertificateData) => {
     const newChain = [...chain];
     
-    // Create a copy of the block to tamper with
+    // Create a shallow copy of the block to tamper with to trigger React re-render properly
+    // We set isTampered to true to show the badge
     newChain[index] = {
         ...newChain[index],
-        data: maliciousData,
-        isTampered: true // Flag as manually modified
+        data: { ...maliciousData },
+        isTampered: true 
     };
     
     // We do NOT update the hash here. This simulates an attacker modifying the database
@@ -154,6 +168,7 @@ const App: React.FC = () => {
 
   const askTutor = async () => {
       if(!chatConcept) return;
+      setChatResponse("Thinking...");
       const res = await explainConcept(chatConcept);
       setChatResponse(res);
   }
@@ -169,6 +184,35 @@ const App: React.FC = () => {
         console.error("Invalid date input");
     }
   }
+
+  const handleVerifyHash = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!searchHash.trim()) return;
+
+      const block = chain.find(b => b.hash === searchHash.trim());
+      
+      if (!block) {
+          setSearchResult({ found: false });
+          return;
+      }
+
+      // Verify integrity by recalculating hash
+      const calculatedHash = await calculateHash(
+          block.index, 
+          block.previousHash, 
+          block.timestamp, 
+          block.data, 
+          block.nonce
+      );
+
+      const isIntegrityValid = calculatedHash === block.hash;
+
+      setSearchResult({
+          found: true,
+          block,
+          isIntegrityValid
+      });
+  };
 
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-500">Initializing Cryptographic Ledger...</div>;
 
@@ -228,7 +272,7 @@ const App: React.FC = () => {
                             onClick={() => setView(AppView.ISSUER)}
                             className="w-24 flex-shrink-0 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition gap-2"
                         >
-                            <PlusCircleIcon size={32} />
+                            <PlusCircle size={32} />
                             <span className="text-xs font-bold">ADD BLOCK</span>
                         </button>
                     </div>
@@ -387,8 +431,10 @@ const App: React.FC = () => {
       {/* AUDITOR VIEW */}
       {view === AppView.AUDITOR && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Security Status */}
+              {/* Left Column */}
               <div className="space-y-6">
+                
+                {/* System Integrity */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                         <ShieldCheck className="text-blue-600" />
@@ -426,10 +472,92 @@ const App: React.FC = () => {
                         </div>
                     )}
                 </div>
+
+                {/* Certificate Verification Tool */}
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                        <FileSearch className="text-blue-600" />
+                        Certificate Verification Tool
+                    </h2>
+                    <form onSubmit={handleVerifyHash} className="space-y-4">
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="Paste Certificate Hash (SHA-256)..."
+                                className="flex-1 border border-slate-300 rounded-lg px-4 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={searchHash}
+                                onChange={(e) => setSearchHash(e.target.value)}
+                            />
+                            <button 
+                                type="submit"
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                            >
+                                Verify
+                            </button>
+                        </div>
+                    </form>
+
+                    {searchResult && (
+                        <div className={`mt-4 p-4 rounded-lg border ${
+                            !searchResult.found ? 'bg-amber-50 border-amber-200' :
+                            searchResult.isIntegrityValid ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
+                        }`}>
+                            {!searchResult.found ? (
+                                <div className="flex items-start gap-3 text-amber-800">
+                                    <AlertCircle className="mt-0.5 flex-shrink-0" size={18} />
+                                    <div>
+                                        <div className="font-bold">Certificate Not Found</div>
+                                        <p className="text-xs mt-1">No block with this hash exists in the public ledger.</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 border-b border-black/5 pb-2">
+                                        {searchResult.isIntegrityValid ? (
+                                            <CheckCircle className="text-emerald-600" size={20} />
+                                        ) : (
+                                            <XCircle className="text-red-600" size={20} />
+                                        )}
+                                        <span className={`font-bold ${searchResult.isIntegrityValid ? 'text-emerald-800' : 'text-red-800'}`}>
+                                            {searchResult.isIntegrityValid ? 'Valid Certificate' : 'Corrupted / Tampered Data'}
+                                        </span>
+                                    </div>
+                                    
+                                    {searchResult.block && (
+                                        <div className="text-sm space-y-1">
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500">Student:</span>
+                                                <span className="font-semibold">{searchResult.block.data.studentName}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500">Degree:</span>
+                                                <span className="font-semibold">{searchResult.block.data.degree}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500">University:</span>
+                                                <span>{searchResult.block.data.university}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500">Block Index:</span>
+                                                <span className="font-mono">#{searchResult.block.index}</span>
+                                            </div>
+                                            {!searchResult.isIntegrityValid && (
+                                                <div className="mt-2 text-xs text-red-600 bg-red-100 p-2 rounded">
+                                                    <strong>Warning:</strong> The data in this block does not match its signature. The content has been altered after issuance.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
               </div>
 
-              {/* Tutor Chat */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-[500px]">
+              {/* Right Column - Tutor Chat */}
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-[600px]">
                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                       <BrainCircuit className="text-purple-600" />
                       Crypto Tutor
@@ -457,4 +585,16 @@ const App: React.FC = () => {
                       />
                       <button 
                         onClick={askTutor}
-                        className="bg-purple-600 text-white px-4 py
+                        className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition"
+                      >
+                         <Search size={18} />
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+    </Layout>
+  );
+};
+
+export default App;

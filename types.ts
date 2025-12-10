@@ -15,6 +15,7 @@ export interface Block {
   hash: string;
   nonce: number;
   isGenesis?: boolean;
+  isTampered?: boolean;
 }
 
 export interface ValidationResult {

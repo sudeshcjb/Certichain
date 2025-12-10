@@ -99,18 +99,17 @@ const App: React.FC = () => {
   // Handle Tampering (Attack Simulation)
   const handleTamper = async (index: number, maliciousData: CertificateData) => {
     const newChain = [...chain];
-    const targetBlock = newChain[index];
     
-    // Update data without updating the hash (simulating a DB hack where signature isn't updated)
-    // OR update the hash but the NEXT block will fail validation
-    targetBlock.data = maliciousData;
+    // Create a copy of the block to tamper with
+    newChain[index] = {
+        ...newChain[index],
+        data: maliciousData,
+        isTampered: true // Flag as manually modified
+    };
     
-    // In a real hack, the attacker might try to update the hash too:
-    // targetBlock.hash = await calculateHash(...) 
-    // But they can't update the NEXT block's `previousHash` easily without rippling to the end.
-    
-    // For this demo, let's just update the data. The card component calculates the "real" hash 
-    // and compares it to the "stored" hash, showing the mismatch immediately.
+    // We do NOT update the hash here. This simulates an attacker modifying the database
+    // record (the data) but failing to (or choosing not to) re-calculate the signature.
+    // The BlockCard will detect `storedHash !== calculatedHash`.
     
     setChain(newChain);
   };
@@ -119,19 +118,28 @@ const App: React.FC = () => {
   const handleMine = async (index: number) => {
       // To fix block N, we must update its hash. 
       // Then we must update Block N+1's previousHash, and then re-mine Block N+1, etc.
-      // This demonstrates the difficulty of altering the chain.
       
       const newChain = [...chain];
-      let currentBlock = newChain[index];
-      let prevHash = index === 0 ? "0" : newChain[index-1].hash;
-
-      // Re-calculate hash for the tampered block
-      currentBlock.hash = await calculateHash(currentBlock.index, prevHash, currentBlock.timestamp, currentBlock.data, currentBlock.nonce);
       
-      // Cascade update
+      // Update the target block's hash to match its current (potentially tampered) data
+      let prevHash = index === 0 ? "0" : newChain[index-1].hash;
+      const currentBlock = newChain[index];
+
+      // Clone block to update hash
+      newChain[index] = {
+          ...currentBlock,
+          hash: await calculateHash(currentBlock.index, prevHash, currentBlock.timestamp, currentBlock.data, currentBlock.nonce)
+      };
+      
+      // Cascade update to subsequent blocks to fix links
       for(let i = index + 1; i < newChain.length; i++) {
-          newChain[i].previousHash = newChain[i-1].hash;
-          newChain[i].hash = await calculateHash(newChain[i].index, newChain[i].previousHash, newChain[i].timestamp, newChain[i].data, newChain[i].nonce);
+          const b = newChain[i];
+          const newPrevHash = newChain[i-1].hash;
+          newChain[i] = {
+              ...b,
+              previousHash: newPrevHash,
+              hash: await calculateHash(b.index, newPrevHash, b.timestamp, b.data, b.nonce)
+          };
       }
       
       setChain(newChain);
@@ -148,6 +156,18 @@ const App: React.FC = () => {
       if(!chatConcept) return;
       const res = await explainConcept(chatConcept);
       setChatResponse(res);
+  }
+
+  const handleNewCertDateChange = (dateString: string) => {
+    if (!dateString) return;
+    try {
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+            setNewCert({...newCert, issuanceDate: date.toISOString()});
+        }
+    } catch (e) {
+        console.error("Invalid date input");
+    }
   }
 
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-500">Initializing Cryptographic Ledger...</div>;
@@ -307,7 +327,7 @@ const App: React.FC = () => {
                             type="datetime-local" 
                             className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                             value={newCert.issuanceDate.slice(0, 16)}
-                            onChange={e => setNewCert({...newCert, issuanceDate: new Date(e.target.value).toISOString()})}
+                            onChange={e => handleNewCertDateChange(e.target.value)}
                         />
                     </div>
 
@@ -437,21 +457,4 @@ const App: React.FC = () => {
                       />
                       <button 
                         onClick={askTutor}
-                        className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition"
-                      >
-                          <Search size={18} />
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-    </Layout>
-  );
-};
-
-// Helper for the add icon
-const PlusCircleIcon = ({ size }: { size: number }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-);
-
-export default App;
+                        className="bg-purple-600 text-white px-4 py

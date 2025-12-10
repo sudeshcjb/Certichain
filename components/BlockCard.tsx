@@ -25,20 +25,49 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, prevBlock, isValid, onTamp
     updateLocalHash();
   }, [block]);
 
+  // Sync editData when block data changes externally
+  useEffect(() => {
+    setEditData(block.data);
+  }, [block.data]);
+
   const handleSave = () => {
     onTamper(block.index, editData);
     setIsEditing(false);
   };
 
+  const handleDateChange = (dateString: string) => {
+      if (!dateString) return; // Prevent crash on empty input
+      try {
+          const date = new Date(dateString);
+          if (!isNaN(date.getTime())) {
+              setEditData({ ...editData, issuanceDate: date.toISOString() });
+          }
+      } catch (e) {
+          console.error("Invalid date");
+      }
+  };
+
   const isHashValid = localHash === block.hash;
   // A block is "broken" in the chain view if the stored previousHash doesn't match the actual previous block's hash
   const isLinkBroken = prevBlock ? prevBlock.hash !== block.previousHash : false;
+  const isError = !isValid || isLinkBroken || !isHashValid;
 
   return (
     <div className={`relative flex-shrink-0 w-80 p-4 rounded-xl border-2 transition-all duration-500 ${
-      !isValid || isLinkBroken || !isHashValid ? 'border-red-500 bg-red-50 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'border-slate-200 bg-white shadow-sm hover:shadow-md'
+      isError 
+        ? 'border-red-500 bg-red-50 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
+        : block.isTampered 
+            ? 'border-orange-400 bg-orange-50 shadow-md' 
+            : 'border-slate-200 bg-white shadow-sm hover:shadow-md'
     }`}>
       
+      {/* Tampered Badge - Shows if data was manually edited, even if hash is valid (re-mined) */}
+      {block.isTampered && (
+        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-20 flex items-center gap-1 whitespace-nowrap">
+            <AlertTriangle size={10} /> DATA TAMPERED
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -54,7 +83,7 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, prevBlock, isValid, onTamp
                  {isEditing ? <span className="text-xs font-bold text-blue-600">Cancel</span> : <Edit size={14} />}
                </button>
             )}
-           {isValid && !isLinkBroken && isHashValid ? (
+           {!isError ? (
              <ShieldCheck size={16} className="text-emerald-500" />
            ) : (
              <AlertTriangle size={16} className="text-red-500" />
@@ -94,6 +123,19 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, prevBlock, isValid, onTamp
                     placeholder="GPA"
                     className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300"
                 />
+                 <input 
+                    type="date" 
+                    value={editData.graduationDate}
+                    onChange={(e) => setEditData({...editData, graduationDate: e.target.value})}
+                    className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300"
+                />
+                 {/* Added Issuance Date Edit Field */}
+                 <input 
+                    type="datetime-local" 
+                    value={editData.issuanceDate ? editData.issuanceDate.slice(0, 16) : ''}
+                    onChange={(e) => handleDateChange(e.target.value)}
+                    className="w-full text-sm border p-1 rounded font-mono bg-yellow-50 border-yellow-300"
+                />
                 <button 
                     onClick={handleSave}
                     className="w-full flex items-center justify-center gap-2 bg-yellow-100 text-yellow-800 text-xs font-bold py-1 rounded hover:bg-yellow-200"
@@ -102,7 +144,7 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, prevBlock, isValid, onTamp
                 </button>
             </div>
         ) : (
-            <div className="bg-slate-50 p-2 rounded text-sm space-y-1">
+            <div className={`p-2 rounded text-sm space-y-1 ${block.isTampered && !isError ? 'bg-orange-100/50' : 'bg-slate-50'}`}>
                 <div className="flex justify-between">
                     <span className="text-slate-400 text-xs">Student</span>
                     <span className="font-medium text-slate-700">{block.data.studentName}</span>
